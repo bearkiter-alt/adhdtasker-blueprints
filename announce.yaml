@@ -1,0 +1,119 @@
+blueprint:
+  name: ADHDTasker - Per-profile Announce & Lights
+  description: >
+    Announce ADHDTasker chore events for ONE profile to chosen speakers, and optionally
+    flash a light a chosen colour. Triggers on the integration's `adhdtasker_event` bus
+    event and only acts when the event's profile matches this instance. Create one
+    instance per person (Lachlan, Ashton, ...), each with that person's targets.
+  domain: automation
+  source_url: https://github.com/bearkiter-alt/adhdtasker-blueprints/blob/main/announce.yaml
+  input:
+    profile:
+      name: Profile name
+      description: Must match the event's profile name exactly, e.g. "Lachlan" or "Bruce Muir".
+      selector:
+        text: {}
+    events:
+      name: Events to announce
+      description: Which chore events trigger an announcement.
+      default:
+        - task.due
+        - task.completed
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Task due
+              value: task.due
+            - label: Task completed
+              value: task.completed
+            - label: Reward requested
+              value: reward.requested
+    speakers:
+      name: Speakers
+      description: One or more media players to announce on (e.g. a shared speaker + this person's room speaker).
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+    tts_entity:
+      name: TTS engine
+      default: tts.home_assistant_cloud
+      selector:
+        entity:
+          domain: tts
+    lights:
+      name: Light(s) to flash (optional)
+      description: Leave empty for no light effect.
+      default: []
+      selector:
+        entity:
+          domain: light
+          multiple: true
+    colour:
+      name: Flash colour
+      default: [0, 0, 255]
+      selector:
+        color_rgb: {}
+    flash_seconds:
+      name: Flash duration
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: seconds
+
+mode: queued
+max: 25
+
+triggers:
+  - trigger: event
+    event_type: adhdtasker_event
+
+variables:
+  profile: !input profile
+  events: !input events
+  speakers: !input speakers
+  lights: !input lights
+  colour: !input colour
+  ev: "{{ trigger.event.data.event }}"
+  who: "{{ trigger.event.data.get('profile', {}).get('name', '') }}"
+  title: "{{ trigger.event.data.get('task', {}).get('title', 'a task') }}"
+  points: "{{ trigger.event.data.get('task', {}).get('points', 0) | int }}"
+  messages:
+    task.due: "Heads up {{ who }} — {{ title }} is due."
+    task.completed: "Nice work {{ who }}! You finished {{ title }}{{ ' for ' ~ points ~ ' points' if points > 0 else '' }}."
+    reward.requested: "{{ who }} has requested a reward."
+  message: "{{ messages.get(ev, '') }}"
+
+conditions:
+  - condition: template
+    value_template: "{{ who == profile and ev in events }}"
+
+actions:
+  - if: "{{ message != '' and speakers | count > 0 }}"
+    then:
+      - action: tts.speak
+        target:
+          entity_id: !input tts_entity
+        data:
+          media_player_entity_id: "{{ speakers }}"
+          message: "{{ message }}"
+  - if: "{{ lights | count > 0 and colour }}"
+    then:
+      - action: scene.create
+        data:
+          scene_id: "adhdtasker_restore_{{ profile | slugify }}"
+          snapshot_entities: "{{ lights }}"
+      - action: light.turn_on
+        target:
+          entity_id: "{{ lights }}"
+        data:
+          rgb_color: "{{ colour }}"
+          brightness_pct: 100
+      - delay:
+          seconds: !input flash_seconds
+      - action: scene.turn_on
+        target:
+          entity_id: "scene.adhdtasker_restore_{{ profile | slugify }}"
