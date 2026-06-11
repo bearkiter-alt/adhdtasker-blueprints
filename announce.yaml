@@ -63,6 +63,25 @@ blueprint:
           min: 1
           max: 60
           unit_of_measurement: seconds
+    quiet_enabled:
+      name: Quiet time
+      description: >
+        Suppress announcements AND light flashes during the quiet window (e.g. while the
+        kids are asleep). Chore events still happen — boards, sensors and dashboards keep
+        updating — this only silences this person's announcer.
+      default: true
+      selector:
+        boolean: {}
+    quiet_start:
+      name: Quiet time starts
+      default: "20:30:00"
+      selector:
+        time: {}
+    quiet_end:
+      name: Quiet time ends
+      default: "07:00:00"
+      selector:
+        time: {}
 
 mode: queued
 max: 25
@@ -77,6 +96,7 @@ variables:
   speakers: !input speakers
   lights: !input lights
   colour: !input colour
+  quiet_enabled: !input quiet_enabled
   ev: "{{ trigger.event.data.event }}"
   who: "{{ trigger.event.data.get('profile', {}).get('name', '') }}"
   title: "{{ trigger.event.data.get('task', {}).get('title', 'a task') }}"
@@ -90,6 +110,17 @@ variables:
 conditions:
   - condition: template
     value_template: "{{ who == profile and ev in events }}"
+  # Quiet time: skip entirely inside the window. HA's time condition handles windows
+  # that span midnight (after > before) correctly. Disable via the Quiet time toggle.
+  - condition: or
+    conditions:
+      - condition: template
+        value_template: "{{ not quiet_enabled }}"
+      - condition: not
+        conditions:
+          - condition: time
+            after: !input quiet_start
+            before: !input quiet_end
 
 actions:
   - if: "{{ message != '' and speakers | count > 0 }}"
