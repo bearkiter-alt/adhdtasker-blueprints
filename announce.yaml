@@ -100,7 +100,7 @@ actions:
         data:
           media_player_entity_id: "{{ speakers }}"
           message: "{{ message }}"
-  - if: "{{ lights | count > 0 and colour }}"
+  - if: "{{ lights | count > 0 and colour | count == 3 }}"
     then:
       - action: scene.create
         data:
