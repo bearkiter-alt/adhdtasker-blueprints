@@ -12,13 +12,20 @@ Create **one instance per person** — each filters on its profile name and targ
   (it fires `adhdtasker_event` when its webhook receives a push from the web app).
 - A TTS engine (default `tts.home_assistant_cloud`).
 
-## Install (HACS)
-1. HACS → ⋮ → **Custom repositories** → add `https://github.com/bearkiter-alt/adhdtasker-blueprints`,
-   category **Blueprint**.
-2. Download it, then **Settings → Automations & Scenes → Blueprints → Create Automation** from
-   *ADHDTasker – Announce & Lights*.
+## Install
+Blueprints don't go through HACS (HACS has no blueprint category) — they import natively:
 
-Or import directly: **Settings → Blueprints → Import Blueprint** and paste the raw URL of `announce.yaml`.
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fbearkiter-alt%2Fadhdtasker-blueprints%2Fblob%2Fmain%2Fannounce.yaml)
+
+Or manually: **Settings → Automations & Scenes → Blueprints → Import Blueprint** and paste:
+```
+https://github.com/bearkiter-alt/adhdtasker-blueprints/blob/main/announce.yaml
+```
+Then **Create Automation** from *ADHDTasker – Announce & Lights*, one instance per person.
+
+## Updating
+On the **Blueprints** page, open the blueprint's ⋮ menu → **Re-import** (existing automations
+keep their settings; new inputs pick up their defaults).
 
 ## Inputs
 | Input | What |
@@ -30,6 +37,8 @@ Or import directly: **Settings → Blueprints → Import Blueprint** and paste t
 | `lights` | Optional light(s) to flash; leave empty for none. |
 | `colour` | Flash colour (RGB). |
 | `flash_seconds` | Flash duration. |
+| `quiet_enabled` | Quiet time on/off (default **on**) — suppresses TTS + lights in the window; events/sensors keep updating. *(v1.1.0)* |
+| `quiet_start` / `quiet_end` | The quiet window (default **20:30 → 07:00**; spans midnight). *(v1.1.0)* |
 
 ## Example
 - **Lachlan** → speakers: living-room pair + his room speaker; light: living-room 4D; colour: blue.
