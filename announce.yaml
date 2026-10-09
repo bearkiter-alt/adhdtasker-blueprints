@@ -5,12 +5,20 @@ blueprint:
     flash a light a chosen colour. Triggers on the integration's `adhdtasker_event` bus
     event and only acts when the event's profile matches this instance. Create one
     instance per person (Lachlan, Ashton, ...), each with that person's targets.
+
+
+    Unassigned "Anyone" chores carry no profile name, so no per-person instance can match
+    them. To announce those too, switch on "Also announce Anyone chores" — on exactly ONE
+    instance, or on a dedicated instance whose Profile name matches nobody (e.g. "Anyone").
   domain: automation
   source_url: https://github.com/bearkiter-alt/adhdtasker-blueprints/blob/main/announce.yaml
   input:
     profile:
       name: Profile name
-      description: Must match the event's profile name exactly, e.g. "Lachlan" or "Bruce Muir".
+      description: >
+        Must match the event's profile name exactly, e.g. "Lachlan" or "Bruce Muir". For an
+        Anyone-only announcer, use a name that matches no profile (e.g. "Anyone") and switch
+        on "Also announce Anyone chores" below.
       selector:
         text: {}
     events:
@@ -23,12 +31,28 @@ blueprint:
         select:
           multiple: true
           options:
+            - label: Task added
+              value: task.added
+            - label: Interrupt added (something has come up)
+              value: interrupt.added
             - label: Task due
               value: task.due
             - label: Task completed
               value: task.completed
+            - label: Task approved
+              value: task.approved
             - label: Reward requested
               value: reward.requested
+    announce_unassigned:
+      name: Also announce Anyone chores
+      description: >
+        Include chores with no assignee, announced as "anyone" instead of a person's name.
+        Leave this OFF on per-person instances: if two instances share a speaker and both
+        have it on, the same chore gets announced twice. Switch it on for one instance
+        only, or for a dedicated Anyone instance.
+      default: false
+      selector:
+        boolean: {}
     speakers:
       name: Speakers
       description: One or more media players to announce on (e.g. a shared speaker + this person's room speaker).
@@ -97,19 +121,38 @@ variables:
   lights: !input lights
   colour: !input colour
   quiet_enabled: !input quiet_enabled
+  announce_unassigned: !input announce_unassigned
   ev: "{{ trigger.event.data.event }}"
   who: "{{ trigger.event.data.get('profile', {}).get('name', '') }}"
+  # Unassigned ("Anyone") chores send an empty profile name — say "anyone", not nothing.
+  unassigned: "{{ who == '' }}"
+  who_label: "{{ who if who else 'anyone' }}"
   title: "{{ trigger.event.data.get('task', {}).get('title', 'a task') }}"
   points: "{{ trigger.event.data.get('task', {}).get('points', 0) | int }}"
   messages:
-    task.due: "Heads up {{ who }} — {{ title }} is due."
-    task.completed: "Nice work {{ who }}! You finished {{ title }}{{ ' for ' ~ points ~ ' points' if points > 0 else '' }}."
-    reward.requested: "{{ who }} has requested a reward."
+    task.added: >-
+      {{ "New chore up for grabs: " ~ title ~ ". Anyone can take it." if unassigned
+         else "New chore for " ~ who ~ ": " ~ title ~ "." }}
+    interrupt.added: >-
+      {{ "Something has come up: " ~ title ~ "." }}
+    task.due: >-
+      {{ title ~ " is due, and anyone can grab it." if unassigned
+         else "Heads up " ~ who ~ " — " ~ title ~ " is due." }}
+    task.completed: >-
+      {{ "Nice work " ~ who_label ~ "! You finished " ~ title
+         ~ (" for " ~ points ~ " points" if points > 0 else "") ~ "." }}
+    task.approved: >-
+      {{ "Approved: " ~ title ~ (" for " ~ points ~ " points" if points > 0 else "") ~ "." }}
+    reward.requested: >-
+      {{ who_label ~ " has requested a reward." }}
   message: "{{ messages.get(ev, '') }}"
 
 conditions:
+  # Match this instance's person, or — when switched on — the unassigned "Anyone" chores
+  # that carry no profile name and so can never match a per-person instance.
   - condition: template
-    value_template: "{{ who == profile and ev in events }}"
+    value_template: >-
+      {{ ev in events and (who == profile or (announce_unassigned and who == '')) }}
   # Quiet time: skip entirely inside the window. HA's time condition handles windows
   # that span midnight (after > before) correctly. Disable via the Quiet time toggle.
   - condition: or
